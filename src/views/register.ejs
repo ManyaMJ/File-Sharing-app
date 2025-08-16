@@ -1,0 +1,129 @@
+<%- include('partials/header') %>
+
+<div class="container">
+    <div class="auth-container">
+        <div class="auth-illustration">
+            <svg viewBox="0 0 400 300" style="width: 100%; max-width: 400px;">
+                <defs>
+                    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#667eea"/>
+                        <stop offset="50%" style="stop-color:#764ba2"/>
+                        <stop offset="100%" style="stop-color:#f093fb"/>
+                    </linearGradient>
+                </defs>
+                <rect x="150" y="100" width="100" height="80" rx="8" fill="url(#grad2)" opacity="0.3"/>
+                <rect x="160" y="110" width="80" height="60" rx="6" fill="url(#grad2)" opacity="0.5"/>
+                <circle cx="200" cy="140" r="15" fill="#667eea"/>
+                <path d="M185 155 L215 155" stroke="#667eea" stroke-width="3" stroke-linecap="round"/>
+                <path d="M190 165 L210 165" stroke="#667eea" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <h2 style="margin-top: 2rem; color: #ffffff;">Join FileShare</h2>
+            <p style="color: rgba(255, 255, 255, 0.7); margin-top: 0.5rem;">Create your account and start sharing</p>
+        </div>
+
+        <div class="auth-form">
+            <div class="card">
+                <h2 style="text-align: center; margin-bottom: 2rem; color: #ffffff;">Create Account</h2>
+                
+                <div id="alert-container"></div>
+
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="email" class="form-label">Email Address</label>
+                        <input type="email" id="email" name="email" class="form-input" placeholder="Enter your email" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" id="password" name="password" class="form-input" placeholder="Choose a password (min 6 characters)" required minlength="6">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="confirmPassword" class="form-label">Confirm Password</label>
+                        <input type="password" id="confirmPassword" name="confirmPassword" class="form-input" placeholder="Confirm your password" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-bottom: 1rem;">
+                        <span class="btn-text">Create Account</span>
+                        <span class="spinner hidden"></span>
+                    </button>
+                </form>
+
+                <p style="text-align: center; color: rgba(255, 255, 255, 0.7);">
+                    Already have an account? <a href="/login" style="color: #667eea; text-decoration: none;">Sign in</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const btnText = submitBtn.querySelector('.btn-text');
+    const spinner = submitBtn.querySelector('.spinner');
+    
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+    
+    // Password confirmation check
+    if (data.password !== data.confirmPassword) {
+        showAlert('Passwords do not match', 'error');
+        return;
+    }
+    
+    // Show loading state
+    btnText.textContent = 'Creating Account...';
+    spinner.classList.remove('hidden');
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                email: data.email,
+                password: data.password
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            localStorage.setItem('token', result.token);
+            localStorage.setItem('user', JSON.stringify(result.user));
+            showAlert('Account created successfully! Redirecting...', 'success');
+            setTimeout(() => {
+                window.location.href = '/dashboard';
+            }, 1000);
+        } else {
+            showAlert(result.error || 'Registration failed', 'error');
+        }
+    } catch (error) {
+        showAlert('Network error. Please try again.', 'error');
+    } finally {
+        // Reset button state
+        btnText.textContent = 'Create Account';
+        spinner.classList.add('hidden');
+        submitBtn.disabled = false;
+    }
+});
+
+function showAlert(message, type) {
+    const alertContainer = document.getElementById('alert-container');
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type}`;
+    alert.textContent = message;
+    alertContainer.appendChild(alert);
+    
+    setTimeout(() => {
+        alert.remove();
+    }, 5000);
+}
+</script>
+
+<%- include('partials/footer') %>

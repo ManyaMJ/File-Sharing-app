@@ -1,0 +1,113 @@
+<%- include('partials/header') %>
+
+<div class="container">
+    <div class="auth-container">
+        <div class="auth-illustration">
+            <svg viewBox="0 0 400 300" style="width: 100%; max-width: 400px;">
+                <defs>
+                    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#667eea"/>
+                        <stop offset="100%" style="stop-color:#764ba2"/>
+                    </linearGradient>
+                </defs>
+                <circle cx="200" cy="150" r="80" fill="url(#grad1)" opacity="0.2"/>
+                <circle cx="200" cy="150" r="60" fill="url(#grad1)" opacity="0.4"/>
+                <circle cx="200" cy="150" r="40" fill="url(#grad1)" opacity="0.6"/>
+                <path d="M170 130 L185 145 L230 100" stroke="#667eea" stroke-width="4" fill="none" stroke-linecap="round"/>
+            </svg>
+            <h2 style="margin-top: 2rem; color: #ffffff;">Welcome Back</h2>
+            <p style="color: rgba(255, 255, 255, 0.7); margin-top: 0.5rem;">Sign in to access your files</p>
+        </div>
+
+        <div class="auth-form">
+            <div class="card">
+                <h2 style="text-align: center; margin-bottom: 2rem; color: #ffffff;">Sign In</h2>
+                
+                <div id="alert-container"></div>
+
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="email" class="form-label">Email Address</label>
+                        <input type="email" id="email" name="email" class="form-input" placeholder="Enter your email" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" id="password" name="password" class="form-input" placeholder="Enter your password" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-bottom: 1rem;">
+                        <span class="btn-text">Sign In</span>
+                        <span class="spinner hidden"></span>
+                    </button>
+                </form>
+
+                <p style="text-align: center; color: rgba(255, 255, 255, 0.7);">
+                    Don't have an account? <a href="/register" style="color: #667eea; text-decoration: none;">Sign up</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const btnText = submitBtn.querySelector('.btn-text');
+    const spinner = submitBtn.querySelector('.spinner');
+    
+    // Show loading state
+    btnText.textContent = 'Signing In...';
+    spinner.classList.remove('hidden');
+    submitBtn.disabled = true;
+    
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+    
+    try {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            localStorage.setItem('token', result.token);
+            localStorage.setItem('user', JSON.stringify(result.user));
+            showAlert('Login successful! Redirecting...', 'success');
+            setTimeout(() => {
+                window.location.href = '/dashboard';
+            }, 1000);
+        } else {
+            showAlert(result.error || 'Login failed', 'error');
+        }
+    } catch (error) {
+        showAlert('Network error. Please try again.', 'error');
+    } finally {
+        // Reset button state
+        btnText.textContent = 'Sign In';
+        spinner.classList.add('hidden');
+        submitBtn.disabled = false;
+    }
+});
+
+function showAlert(message, type) {
+    const alertContainer = document.getElementById('alert-container');
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type}`;
+    alert.textContent = message;
+    alertContainer.appendChild(alert);
+    
+    setTimeout(() => {
+        alert.remove();
+    }, 5000);
+}
+</script>
+
+<%- include('partials/footer') %>

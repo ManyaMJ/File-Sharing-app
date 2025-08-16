@@ -1,0 +1,361 @@
+<%- include('partials/header') %>
+
+<div class="container">
+    <div id="loginRequired" class="card" style="text-align: center; display: none;">
+        <h2 style="color: #ffffff; margin-bottom: 1rem;">Access Restricted</h2>
+        <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 2rem;">Please sign in to access your dashboard.</p>
+        <a href="/login" class="btn btn-primary">Sign In</a>
+    </div>
+
+    <div id="dashboard" class="fade-in" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <div>
+                <h1 style="color: #ffffff; margin-bottom: 0.5rem;">File Dashboard</h1>
+                <p style="color: rgba(255, 255, 255, 0.7);">Welcome back, <span id="userEmail"></span></p>
+            </div>
+            <button onclick="logout()" class="btn btn-secondary">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="card">
+            <h3 style="color: #ffffff; margin-bottom: 1.5rem;">
+                <i class="fas fa-cloud-upload-alt"></i> Upload Files
+            </h3>
+            
+            <div id="alert-container"></div>
+
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                    </div>
+                    <h4 style="color: #ffffff; margin-bottom: 0.5rem;">Drop files here or click to browse</h4>
+                    <p style="color: rgba(255, 255, 255, 0.6);">Maximum file size: 100MB</p>
+                    <input type="file" id="fileInput" name="file" style="display: none;" required>
+                </div>
+
+                <div id="uploadProgress" class="hidden" style="margin-top: 1rem;">
+                    <div class="progress">
+                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                    </div>
+                    <p id="uploadStatus" style="text-align: center; color: rgba(255, 255, 255, 0.7); margin-top: 0.5rem;"></p>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;" id="uploadBtn">
+                    <span class="btn-text">Upload File</span>
+                    <span class="spinner hidden"></span>
+                </button>
+            </form>
+        </div>
+
+        <!-- Files List Section -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h3 style="color: #ffffff;">
+                    <i class="fas fa-folder"></i> Your Files
+                </h3>
+                <button onclick="loadFiles()" class="btn btn-secondary">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+            
+            <div id="filesContainer">
+                <div style="text-align: center; padding: 2rem;">
+                    <div class="spinner"></div>
+                    <p style="color: rgba(255, 255, 255, 0.7); margin-top: 1rem;">Loading your files...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Check if user is logged in
+const token = localStorage.getItem('token');
+const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+if (!token) {
+    document.getElementById('loginRequired').style.display = 'block';
+} else {
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('userEmail').textContent = user.email || 'User';
+    loadFiles();
+}
+
+// File upload handling
+const uploadArea = document.getElementById('uploadArea');
+const fileInput = document.getElementById('fileInput');
+const uploadForm = document.getElementById('uploadForm');
+
+uploadArea.addEventListener('click', () => fileInput.click());
+
+uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('dragover');
+});
+
+uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('dragover');
+});
+
+uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        fileInput.files = files;
+        updateUploadAreaText(files[0]);
+    }
+});
+
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        updateUploadAreaText(e.target.files[0]);
+    }
+});
+
+function updateUploadAreaText(file) {
+    const uploadIcon = uploadArea.querySelector('.upload-icon i');
+    const title = uploadArea.querySelector('h4');
+    const subtitle = uploadArea.querySelector('p');
+    
+    uploadIcon.className = 'fas fa-file';
+    title.textContent = file.name;
+    subtitle.textContent = `Size: ${formatFileSize(file.size)}`;
+}
+
+uploadForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    if (!fileInput.files[0]) {
+        showAlert('Please select a file to upload', 'error');
+        return;
+    }
+    
+    const submitBtn = document.getElementById('uploadBtn');
+    const btnText = submitBtn.querySelector('.btn-text');
+    const spinner = submitBtn.querySelector('.spinner');
+    const progressContainer = document.getElementById('uploadProgress');
+    const progressBar = document.getElementById('progressBar');
+    const uploadStatus = document.getElementById('uploadStatus');
+    
+    // Show progress
+    progressContainer.classList.remove('hidden');
+    btnText.textContent = 'Uploading...';
+    spinner.classList.remove('hidden');
+    submitBtn.disabled = true;
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    
+    try {
+        const xhr = new XMLHttpRequest();
+        
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                progressBar.style.width = percentComplete + '%';
+                uploadStatus.textContent = `Uploading... ${Math.round(percentComplete)}%`;
+            }
+        });
+        
+        xhr.onload = function() {
+            const result = JSON.parse(xhr.responseText);
+            
+            if (xhr.status === 201) {
+                showAlert('File uploaded successfully!', 'success');
+                uploadForm.reset();
+                resetUploadArea();
+                loadFiles();
+            } else {
+                showAlert(result.error || 'Upload failed', 'error');
+            }
+            
+            // Reset form
+            progressContainer.classList.add('hidden');
+            btnText.textContent = 'Upload File';
+            spinner.classList.add('hidden');
+            submitBtn.disabled = false;
+            progressBar.style.width = '0%';
+        };
+        
+        xhr.onerror = function() {
+            showAlert('Upload failed. Please try again.', 'error');
+            progressContainer.classList.add('hidden');
+            btnText.textContent = 'Upload File';
+            spinner.classList.add('hidden');
+            submitBtn.disabled = false;
+            progressBar.style.width = '0%';
+        };
+        
+        xhr.open('POST', '/api/files/upload');
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.send(formData);
+        
+    } catch (error) {
+        showAlert('Upload failed. Please try again.', 'error');
+        progressContainer.classList.add('hidden');
+        btnText.textContent = 'Upload File';
+        spinner.classList.add('hidden');
+        submitBtn.disabled = false;
+        progressBar.style.width = '0%';
+    }
+});
+
+function resetUploadArea() {
+    const uploadIcon = uploadArea.querySelector('.upload-icon i');
+    const title = uploadArea.querySelector('h4');
+    const subtitle = uploadArea.querySelector('p');
+    
+    uploadIcon.className = 'fas fa-cloud-upload-alt';
+    title.textContent = 'Drop files here or click to browse';
+    subtitle.textContent = 'Maximum file size: 100MB';
+}
+
+async function loadFiles() {
+    const container = document.getElementById('filesContainer');
+    container.innerHTML = `
+        <div style="text-align: center; padding: 2rem;">
+            <div class="spinner"></div>
+            <p style="color: rgba(255, 255, 255, 0.7); margin-top: 1rem;">Loading your files...</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch('/api/files/user', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            displayFiles(result.files);
+        } else {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 2rem;">
+                    <p style="color: #ff6b6b;">Failed to load files: ${result.error}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 2rem;">
+                <p style="color: #ff6b6b;">Network error. Please try again.</p>
+            </div>
+        `;
+    }
+}
+
+function displayFiles(files) {
+    const container = document.getElementById('filesContainer');
+    
+    if (files.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 3rem;">
+                <div style="font-size: 3rem; color: rgba(255, 255, 255, 0.3); margin-bottom: 1rem;">
+                    <i class="fas fa-folder-open"></i>
+                </div>
+                <h4 style="color: rgba(255, 255, 255, 0.7); margin-bottom: 0.5rem;">No files yet</h4>
+                <p style="color: rgba(255, 255, 255, 0.5);">Upload your first file to get started</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = files.map(file => `
+        <div class="file-item">
+            <div class="file-info">
+                <div class="file-name">
+                    <i class="fas ${getFileIcon(file.filename)}"></i> ${file.filename}
+                </div>
+                <div class="file-meta">
+                    ${formatFileSize(file.size)} • ${formatDate(file.uploadTime)} • ${file.downloadCount} downloads
+                </div>
+            </div>
+            <div class="file-actions">
+                <button onclick="copyLink('${file.downloadLink}')" class="copy-btn" title="Copy download link">
+                    <i class="fas fa-copy"></i>
+                </button>
+                <a href="${file.downloadLink}" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
+                    <i class="fas fa-download"></i> Download
+                </a>
+            </div>
+        </div>
+    `).join('');
+}
+
+function getFileIcon(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const iconMap = {
+        'pdf': 'fa-file-pdf',
+        'doc': 'fa-file-word', 'docx': 'fa-file-word',
+        'xls': 'fa-file-excel', 'xlsx': 'fa-file-excel',
+        'ppt': 'fa-file-powerpoint', 'pptx': 'fa-file-powerpoint',
+        'jpg': 'fa-file-image', 'jpeg': 'fa-file-image', 'png': 'fa-file-image', 'gif': 'fa-file-image',
+        'mp4': 'fa-file-video', 'avi': 'fa-file-video', 'mov': 'fa-file-video',
+        'mp3': 'fa-file-audio', 'wav': 'fa-file-audio',
+        'zip': 'fa-file-archive', 'rar': 'fa-file-archive',
+        'txt': 'fa-file-alt',
+        'js': 'fa-file-code', 'html': 'fa-file-code', 'css': 'fa-file-code', 'py': 'fa-file-code'
+    };
+    return iconMap[ext] || 'fa-file';
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function formatDate(dateString) {
+    return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+async function copyLink(url) {
+    try {
+        await navigator.clipboard.writeText(url);
+        showAlert('Download link copied to clipboard!', 'success');
+    } catch (error) {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = url;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showAlert('Download link copied to clipboard!', 'success');
+    }
+}
+
+function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/login';
+}
+
+function showAlert(message, type) {
+    const alertContainer = document.getElementById('alert-container');
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type}`;
+    alert.textContent = message;
+    alertContainer.appendChild(alert);
+    
+    setTimeout(() => {
+        alert.remove();
+    }, 5000);
+}
+</script>
+
+<%- include('partials/footer') %>
